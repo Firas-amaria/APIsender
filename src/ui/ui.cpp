@@ -5,14 +5,20 @@
 #include "lvgl.h"
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
 namespace ui {
-enum class Screen { Menu, Health, Random, Color, Event, Settings };
+enum class Screen { Menu, Health, Random, Color, Event, Settings, ApiSettings, WifiSettings, WifiPassword };
 enum Command { Home, OpenHealth, OpenRandom, OpenColor, OpenEvent, OpenSettings,
-               Health, Random, Red, Green, Blue, Yellow, A, B, C, Save, Test, Retry };
+               Health, Random, Red, Green, Blue, Yellow, A, B, C, Save, Test, Retry, OpenApi, OpenWifi, ScanWifi, ConnectWifi };
 static Screen screen = Screen::Menu;
 static uint32_t view = 0;
 static lv_obj_t *resultLabel, *numberLabel, *wifiLabel, *serverLabel;
 static lv_obj_t *urlInput, *keyboard, *settingsButtons;
+static lv_obj_t *networkList;
+static wifi::ScanResults visibleNetworks = {};
+static unsigned scanRevision = 0;
+static char selectedSsid[33] = {};
+static bool selectedSecured = false;
 static void show(Screen next);
 static lv_obj_t *label(lv_obj_t *parent, const char *text, int x, int y, int width) {
     auto object = lv_label_create(parent);
@@ -45,6 +51,21 @@ static void onCommand(lv_event_t *event) {
     case OpenColor: show(Screen::Color); break;
     case OpenEvent: show(Screen::Event); break;
     case OpenSettings: show(Screen::Settings); break;
+    case OpenApi: show(Screen::ApiSettings); break;
+    case OpenWifi: show(Screen::WifiSettings); break;
+    case ScanWifi:
+        setResult(wifi::scan() ? "Scanning..." : "Wi-Fi busy. Try again shortly.");
+        break;
+    case ConnectWifi:
+        if (selectedSecured && strlen(lv_textarea_get_text(urlInput)) < 8) {
+            setResult("Password needs at least 8 characters.");
+        } else {
+            if (wifi::connect(selectedSsid, lv_textarea_get_text(urlInput))) {
+                setResult("Connecting and saving network...");
+                lv_textarea_set_text(urlInput, "");
+            } else setResult("Wi-Fi busy or invalid credentials.");
+        }
+        break;
     case Health: send(app::Action::Health); break;
     case Random: send(app::Action::Random); break;
     case Red: send(app::Action::Color, "red"); break;
@@ -75,7 +96,20 @@ static void updateConnection() {
     if (wifiLabel) lv_label_set_text(wifiLabel, wifi::status().text);
     if (serverLabel) lv_label_set_text_fmt(serverLabel, "API Server:\n%s", app::baseUrl());
 }
-static void buildSettings(lv_obj_t *root) {
+static void buildKeyboard(lv_obj_t *root) {
+    keyboard = lv_keyboard_create(root);
+    lv_obj_set_size(keyboard, 320, 230); lv_obj_align(keyboard, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_keyboard_set_textarea(keyboard, urlInput);
+    lv_obj_add_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_event_cb(urlInput, [](lv_event_t *) {
+        lv_obj_clear_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(settingsButtons, LV_OBJ_FLAG_HIDDEN);
+    }, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(keyboard, [](lv_event_t *event) {
+        if (lv_event_get_code(event) == LV_EVENT_READY || lv_event_get_code(event) == LV_EVENT_CANCEL) closeKeyboard();
+    }, LV_EVENT_ALL, nullptr);
+}
+static void buildApiSettings(lv_obj_t *root) {
     wifiLabel = label(root, "", 12, 42, 296);
     serverLabel = label(root, "", 12, 91, 296);
     lv_obj_set_style_text_font(serverLabel, &lv_font_montserrat_14, 0);
@@ -92,32 +126,74 @@ static void buildSettings(lv_obj_t *root) {
     lv_obj_clear_flag(settingsButtons, LV_OBJ_FLAG_SCROLLABLE);
     button(settingsButtons, "Save", 0, Save);
     button(settingsButtons, "Test Connection", 54, Test);
-    button(settingsButtons, "Retry Wi-Fi", 108, Retry);
+    label(settingsButtons, "Enter http://IP:port", 12, 112, 296);
     resultLabel = label(settingsButtons, "Test uses the entered URL.\nSave keeps it after restart.", 12, 161, 296);
-    button(settingsButtons, "Back", 228, Home);
-    keyboard = lv_keyboard_create(root);
-    lv_obj_set_size(keyboard, 320, 230); lv_obj_align(keyboard, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_keyboard_set_textarea(keyboard, urlInput);
-    lv_obj_add_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_event_cb(urlInput, [](lv_event_t *) {
-        lv_obj_clear_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(settingsButtons, LV_OBJ_FLAG_HIDDEN);
-    }, LV_EVENT_CLICKED, nullptr);
-    lv_obj_add_event_cb(keyboard, [](lv_event_t *event) {
-        if (lv_event_get_code(event) == LV_EVENT_READY || lv_event_get_code(event) == LV_EVENT_CANCEL) closeKeyboard();
-    }, LV_EVENT_ALL, nullptr);
+    button(settingsButtons, "Back", 228, OpenSettings);
+    buildKeyboard(root);
+}
+
+static void refreshNetworks() {
+    visibleNetworks = wifi::scanResults();
+    scanRevision = visibleNetworks.revision;
+    lv_obj_clean(networkList);
+    for (int i = 0; i < visibleNetworks.count; ++i) {
+        auto &network = visibleNetworks.networks[i];
+        auto row = lv_list_add_btn(networkList, LV_SYMBOL_WIFI, network.ssid);
+        lv_obj_add_event_cb(row, [](lv_event_t *event) {
+            auto index = reinterpret_cast<intptr_t>(lv_event_get_user_data(event));
+            auto &network = visibleNetworks.networks[index];
+            snprintf(selectedSsid, sizeof(selectedSsid), "%s", network.ssid);
+            selectedSecured = network.secured;
+            show(Screen::WifiPassword);
+        }, LV_EVENT_CLICKED, reinterpret_cast<void *>(static_cast<intptr_t>(i)));
+    }
+    setResult(visibleNetworks.message);
+}
+static void buildWifiSettings(lv_obj_t *root) {
+    wifiLabel = label(root, "", 12, 46, 296);
+    lv_obj_set_style_text_font(wifiLabel, &lv_font_montserrat_14, 0);
+    button(root, "Search for Wi-Fi", 92, ScanWifi);
+    resultLabel = label(root, "", 12, 145, 296);
+    lv_obj_set_style_text_font(resultLabel, &lv_font_montserrat_14, 0);
+    networkList = lv_list_create(root);
+    lv_obj_set_pos(networkList, 12, 181); lv_obj_set_size(networkList, 296, 235);
+    button(root, "Back", 426, OpenSettings);
+    refreshNetworks();
+    setResult(wifi::scan() ? "Scanning..." : "Wi-Fi busy. Try Search again.");
+}
+static void buildWifiPassword(lv_obj_t *root) {
+    wifiLabel = label(root, "", 12, 46, 296);
+    lv_obj_set_style_text_font(wifiLabel, &lv_font_montserrat_14, 0);
+    auto ssid = label(root, selectedSsid, 12, 93, 296);
+    lv_obj_set_height(ssid, 28); lv_label_set_long_mode(ssid, LV_LABEL_LONG_DOT);
+    label(root, selectedSecured ? "Wi-Fi password" : "Open network (no password)", 12, 125, 296);
+    urlInput = lv_textarea_create(root);
+    lv_obj_set_pos(urlInput, 12, 157); lv_obj_set_size(urlInput, 296, 48);
+    lv_textarea_set_one_line(urlInput, true);
+    lv_textarea_set_max_length(urlInput, 64);
+    lv_textarea_set_password_mode(urlInput, true);
+    lv_textarea_set_text(urlInput, "");
+    if (!selectedSecured) lv_obj_add_state(urlInput, LV_STATE_DISABLED);
+    settingsButtons = lv_obj_create(root);
+    lv_obj_remove_style_all(settingsButtons);
+    lv_obj_set_pos(settingsButtons, 0, 220); lv_obj_set_size(settingsButtons, 320, 260);
+    lv_obj_clear_flag(settingsButtons, LV_OBJ_FLAG_SCROLLABLE);
+    button(settingsButtons, "Connect & Save", 0, ConnectWifi);
+    resultLabel = label(settingsButtons, "Connect saves this network for automatic reconnect.", 12, 62, 296);
+    button(settingsButtons, "Back", 206, OpenWifi);
+    buildKeyboard(root);
 }
 static void show(Screen next) {
     screen = next; ++view;
     auto root = lv_scr_act();
     lv_obj_clean(root);
     resultLabel = numberLabel = wifiLabel = serverLabel = nullptr;
-    urlInput = keyboard = settingsButtons = nullptr;
+    urlInput = keyboard = settingsButtons = networkList = nullptr;
     lv_obj_clear_flag(root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(root, lv_color_hex(0xF2F5FA), 0);
     lv_obj_set_style_text_color(root, lv_color_hex(0x15243B), 0);
     lv_obj_set_style_text_font(root, &lv_font_montserrat_18, 0);
-    static const char *titles[] = {"ESP32 API Demo", "Health Check", "Random Number", "Send Color", "Send Event", "Settings"};
+    static const char *titles[] = {"ESP32 API Demo", "Health Check", "Random Number", "Send Color", "Send Event", "Settings", "API Settings", "Wi-Fi Settings", "Join Wi-Fi"};
     auto title = label(root, titles[static_cast<int>(screen)], 12, 10, 296);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
     if (screen == Screen::Menu) {
@@ -132,7 +208,16 @@ static void show(Screen next) {
         button(root, "Send Event", 334, OpenEvent);
         button(root, "Settings", 390, OpenSettings);
     } else if (screen == Screen::Settings) {
-        buildSettings(root);
+        wifiLabel = label(root, "", 12, 52, 296);
+        button(root, "API Settings", 156, OpenApi);
+        button(root, "Wi-Fi Settings", 220, OpenWifi);
+        button(root, "Back", 426, Home);
+    } else if (screen == Screen::ApiSettings) {
+        buildApiSettings(root);
+    } else if (screen == Screen::WifiSettings) {
+        buildWifiSettings(root);
+    } else if (screen == Screen::WifiPassword) {
+        buildWifiPassword(root);
     } else {
         resultLabel = label(root, app::busy() ? "A request is still in progress" : "Ready", 12, 346, 296);
         button(root, "Back", 426, Home);
@@ -159,6 +244,7 @@ static void show(Screen next) {
     updateConnection();
 }
 static void tick(lv_timer_t *) {
+    if (networkList && wifi::scanResults().revision != scanRevision) refreshNetworks();
     app::Completion completion;
     if (app::poll(completion) && completion.view == view) {
         // Never apply a result to a screen opened after that request started.

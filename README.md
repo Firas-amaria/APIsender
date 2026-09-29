@@ -27,7 +27,7 @@ src/
   app/app.*                Request queue and application coordination
   display/display.*        Small display wrapper
   display/vendor/          Proven panel, touch and LVGL-port C drivers
-  ui/ui.*                  Six screens, keyboard and touch events
+  ui/ui.*                  Screens, keyboard and touch events
   network/wifi_manager.*   Wi-Fi connection, status and retries
   network/api_client.*     Four API calls, HTTP and JSON handling
   config/project_config.h Wi-Fi, endpoint paths, limits, touch-test switch
@@ -42,7 +42,8 @@ src/
 ## Build and upload (teacher)
 
 1. Install VS Code and the PlatformIO IDE extension. Open this folder.
-2. Edit `src/config/project_config.h`: set `WIFI_SSID` and `WIFI_PASSWORD`.
+2. Wi-Fi can be configured on the touchscreen after upload. Optionally set
+   `WIFI_SSID` and `WIFI_PASSWORD` in `src/config/project_config.h` as first-boot defaults.
    Do not publish real credentials. An empty password supports an open classroom network.
 3. Use **PlatformIO: Build**, or run in a PlatformIO terminal:
 
@@ -67,13 +68,18 @@ No filesystem or OTA service is needed.
 
 1. Start the student's backend on a laptop on the same network as the ESP32.
    Listen on `0.0.0.0`, not just `127.0.0.1`. Allow the server port through the laptop firewall.
-2. Open **Settings**. Tap the URL field, enter e.g. `http://192.168.1.100:3000`,
+2. Open **Settings > Wi-Fi Settings**. Search for Wi-Fi, select your 2.4 GHz
+   network, enter its password, close the keyboard, and tap **Connect & Save**.
+   Open networks need no password. Connection status and the device IP appear above.
+3. Open **Settings > API Settings**. Tap the URL field, enter e.g. `http://192.168.1.100:3000`,
    and press the keyboard's checkmark to close it. **Test Connection** tests the
    text currently entered. **Save** writes it to NVS and makes it the active URL.
-3. Return to the menu and try Health Check, Get Random Number, Send Color and Send Event.
-4. The menu/settings show Wi-Fi status and the ESP32 IP. Wi-Fi retries every five
-   seconds; Settings also has **Retry Wi-Fi**. Requests report short readable errors.
-5. Restart the board: the saved API URL remains. Wi-Fi credentials come from firmware.
+4. Return to the menu and try Health Check, Get Random Number, Send Color and Send Event.
+5. The menu/settings show Wi-Fi status and the ESP32 IP. Wi-Fi retries every five
+   seconds. Requests report short readable errors.
+6. Restart the board: both the API URL and Wi-Fi credentials remain in NVS.
+   To change networks or correct a password, select a network and connect again.
+   Scans list up to 12 nearby access points (duplicate network names are combined).
 
 Use an HTTP origin: `http://hostname[:port]` or `http://IPv4[:port]`.
 A trailing slash is removed. Paths, query strings, credentials, HTTPS, IPv6 and
@@ -105,6 +111,6 @@ can take longer than one socket timeout because it includes several network step
 Both the initial touch screen and integrated firmware were compiled with PlatformIO.
 Host regression checks exercise the actual API client against a fake HTTP transport,
 including JSON parsing, HTTP errors, payloads, response limits and URL validation.
-A native LVGL preview also checks all six screens, navigation and keyboard events.
+A native LVGL preview also checks the application screens, navigation and keyboard events.
 See `tests/README.md`. Actual screen rendering, touch alignment, Wi-Fi connectivity
 and NVS persistence still require the physical board: follow `docs/TESTING.md`.

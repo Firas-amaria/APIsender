@@ -14,5 +14,6 @@ NVS hardware, LVGL rendering or touch. Use `docs/TESTING.md` for device acceptan
 
 Run `powershell -ExecutionPolicy Bypass -File tests/run_ui.ps1` to render the real
 LVGL/UI source to PPM images in `tests/build/`. This checks navigation between all
-six screens and opening/closing the keyboard using LVGL events. It uses fake app
+screens, opening/closing both keyboards, selecting scan results, rejecting short
+passwords, and submitting secured/open network credentials using LVGL events. It uses fake app
 and Wi-Fi state, so it does not replace board acceptance testing.

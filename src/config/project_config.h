@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 namespace config {
-// Teacher configures Wi-Fi before uploading. Students only build the server.
+// Optional first-boot Wi-Fi defaults. Saved touchscreen settings take precedence.
 constexpr char WIFI_SSID[] = "YOUR_WIFI_SSID";
 constexpr char WIFI_PASSWORD[] = "YOUR_WIFI_PASSWORD";
 constexpr char DEFAULT_BASE_URL[] = "http://192.168.1.100:3000";

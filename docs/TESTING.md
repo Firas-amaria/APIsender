@@ -5,9 +5,12 @@ with the JC3248W535EN before handing devices to a class.
 
 1. Build/upload with `TOUCH_TEST_ONLY=true`. Verify portrait image, correct colors,
    readable text and touch response. Restore false and upload the lesson firmware.
-2. With Wi-Fi placeholders, confirm the menu remains usable and explains the missing
-   SSID. Configure the teacher's network, upload, and check Connected plus an IP.
-3. Enter a LAN Base URL with a trailing slash. Save, leave Settings, confirm the
+2. With Wi-Fi placeholders, open Settings > Wi-Fi Settings, scan, select a network,
+   enter its password and Connect & Save. Check Connected plus an IP. Restart and
+   confirm automatic reconnection. Test an open network, a wrong password followed
+   by a corrected password, switching networks, no scan results, and leaving the
+   screen during a scan. Confirm the keyboard masks passwords and Serial never logs them.
+3. Enter a LAN Base URL with a trailing slash. Save, leave API Settings, confirm the
    normalized active URL, then restart and confirm it persisted.
 4. Try empty text, `https://host`, `http://host:0`, a path, spaces inside the host,
    and `localhost`. Save must report Invalid Base URL without changing the saved URL.
@@ -23,7 +26,7 @@ with the JC3248W535EN before handing devices to a class.
 9. Stop the server or delay responses. Navigate Back while waiting. Verify a stale
    completion does not overwrite another screen. Press another action while busy.
 10. Turn off the access point, then restore it. Confirm status changes, UI stays
-    usable, and automatic/manual reconnect recovers. Repeat API requests.
+    usable, and automatic reconnect recovers. Repeat API requests.
 11. Open/close the keyboard, edit a long URL, revisit all screens repeatedly and
     check for clipped text, touch alignment and stable memory in Serial.
 

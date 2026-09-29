@@ -31,23 +31,30 @@ still changes the active URL even if the user already navigated away.
 
 ## Settings and Wi-Fi
 
-`settings.cpp` reads/writes one NVS string (`lesson/base_url`). Missing settings use
+`settings.cpp` reads/writes the API URL (`lesson/base_url`) and a single Wi-Fi
+credentials blob (`lesson/wifi`) so SSID and password are stored together. Missing API settings use
 the default URL. `base_url.cpp` validates an HTTP host/port and removes trailing
 slashes. Save changes the active URL only after NVS commit succeeds. Test validates
 and tests the entered text without saving it. Editing or closing the keyboard alone
 does not change the active URL. An NVS initialization fault is logged and stops
 startup rather than silently erasing stored settings.
 
-Wi-Fi uses the teacher's compiled SSID/password. Connection events update status.
-A low-priority task retries every five seconds. Missing placeholder credentials
-leave the GUI usable and display a configuration hint. An HTTP failure never
-triggers an automatic POST retry. Network work may block its own worker, not touch.
+Settings opens separate API Settings and Wi-Fi Settings pages. Wi-Fi uses saved
+credentials, falling back to optional compiled defaults on first boot. The Wi-Fi
+driver starts even without credentials, allowing touchscreen scans. A dedicated
+worker serializes scans, credential saves and connection attempts; it retries every
+five seconds. A scan pauses an unfinished connection attempt and resumes it afterward.
+Scan snapshots and connection status are copied under a critical section; the worker
+never touches LVGL. Connect & Save stores the entered credentials before attempting
+connection, so a wrong password can be corrected by selecting the network again.
+Passwords are masked in the UI and never logged. An HTTP failure never triggers
+an automatic POST retry. Network work may block its own worker, not touch.
 
 ## Where to edit
 
 | File | Typical edit |
 | --- | --- |
-| `src/config/project_config.h` | Teacher Wi-Fi credentials, default URL, endpoint constants, limits |
+| `src/config/project_config.h` | Optional Wi-Fi defaults, default URL, endpoint constants, limits |
 | `src/ui/ui.cpp` | Screen wording, layout and buttons |
 | `src/network/api_client.cpp` | API contract or parsing rules |
 | `src/app/app.cpp` | How actions are coordinated |

@@ -18,6 +18,17 @@ bool poll(Completion &) { return false; }
 namespace wifi {
 Status status() { return {true,"Wi-Fi: Connected\nIP: 192.168.1.50"}; }
 void retry() {}
+static int connects = 0;
+static std::string lastSsid, lastPassword;
+static ScanResults networks = {};
+bool scan() {
+ networks = {networks.revision + 1, 2, {{"Classroom", true}, {"Guest", false}}, "Select a network below"};
+ return true;
+}
+ScanResults scanResults() { return networks; }
+bool connect(const char *ssid, const char *password) {
+ ++connects; lastSsid = ssid; lastPassword = password; return true;
+}
 }
 static void flush(lv_disp_drv_t *driver,const lv_area_t *area,lv_color_t *colors) {
  for (int y=area->y1;y<=area->y2;++y)
@@ -65,15 +76,38 @@ int main() {
  for(auto page : {"Health Check","Get Random Number","Send Color","Send Event","Settings"}) {
   click(page); snapshot(page);
   if(!strcmp(page,"Settings")) {
+   click("API Settings"); snapshot("api_settings");
    auto textarea=findType(lv_scr_act(),&lv_textarea_class); assert(textarea);
    lv_event_send(textarea,LV_EVENT_CLICKED,nullptr); snapshot("keyboard");
    auto keyboard=findType(lv_scr_act(),&lv_keyboard_class); assert(keyboard);
    assert(!lv_obj_has_flag(keyboard,LV_OBJ_FLAG_HIDDEN));
    lv_event_send(keyboard,LV_EVENT_READY,nullptr);
    assert(lv_obj_has_flag(keyboard,LV_OBJ_FLAG_HIDDEN));
+   click("Back");
+   click("Wi-Fi Settings"); snapshot("wifi_settings");
+   auto network=findText(lv_scr_act(),"Classroom"); assert(network);
+   lv_event_send(lv_obj_get_parent(network),LV_EVENT_CLICKED,nullptr);
+   snapshot("wifi_password");
+   textarea=findType(lv_scr_act(),&lv_textarea_class); assert(textarea);
+   assert(lv_textarea_get_password_mode(textarea));
+   click("Connect & Save"); assert(wifi::connects == 0);
+   lv_event_send(textarea,LV_EVENT_CLICKED,nullptr); snapshot("wifi_keyboard");
+   keyboard=findType(lv_scr_act(),&lv_keyboard_class);
+   lv_textarea_set_text(textarea,"classroom123");
+   lv_event_send(keyboard,LV_EVENT_READY,nullptr);
+   click("Connect & Save");
+   assert(wifi::connects == 1 && wifi::lastSsid == "Classroom" && wifi::lastPassword == "classroom123");
+   assert(!*lv_textarea_get_text(textarea));
+   click("Back"); snapshot("wifi_return");
+   network=findText(lv_scr_act(),"Guest"); assert(network);
+   lv_event_send(lv_obj_get_parent(network),LV_EVENT_CLICKED,nullptr);
+   snapshot("wifi_open_network");
+   click("Connect & Save");
+   assert(wifi::connects == 2 && wifi::lastSsid == "Guest" && wifi::lastPassword.empty());
+   click("Back"); click("Back");
   }
   click("Back");
  }
- std::cout << "PASS: real LVGL renders six screens; navigation and keyboard events work\n";
+ std::cout << "PASS: real LVGL renders settings navigation, scan results, password entry and open-network connection work\n";
 }
 

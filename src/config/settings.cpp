@@ -4,6 +4,23 @@
 #include "nvs.h"
 #include "esp_log.h"
 namespace settings {
+bool loadWifi(WifiCredentials &credentials) {
+    nvs_handle_t handle;
+    if (nvs_open("lesson", NVS_READONLY, &handle) != ESP_OK) return false;
+    size_t length = sizeof(credentials);
+    auto error = nvs_get_blob(handle, "wifi", &credentials, &length);
+    nvs_close(handle);
+    return error == ESP_OK && length == sizeof(credentials) && credentials.ssid[0] &&
+           credentials.ssid[32] == '\0' && credentials.password[64] == '\0';
+}
+bool saveWifi(const WifiCredentials &credentials) {
+    nvs_handle_t handle;
+    if (nvs_open("lesson", NVS_READWRITE, &handle) != ESP_OK) return false;
+    auto error = nvs_set_blob(handle, "wifi", &credentials, sizeof(credentials));
+    if (error == ESP_OK) error = nvs_commit(handle);
+    nvs_close(handle);
+    return error == ESP_OK;
+}
 void initialize() {
     // Do not silently erase saved settings if NVS is damaged or incompatible.
     ESP_ERROR_CHECK(nvs_flash_init());
