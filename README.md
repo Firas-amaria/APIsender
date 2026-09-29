@@ -92,6 +92,64 @@ is not configured. Guest Wi-Fi may prevent devices from reaching one another.
 Read **[docs/API.md](docs/API.md)** as the student assignment specification.
 Read **[docs/PROJECT_NOTES.md](docs/PROJECT_NOTES.md)** to understand the code.
 
+## API calls and examples
+
+The backend must implement these four routes. The device appends each route to the
+Base URL saved in **Settings > API Settings**. For example, with
+`http://192.168.1.100:3000`, the health request goes to
+`http://192.168.1.100:3000/api/health`.
+
+| Device action | Method and route | Request body | Example response |
+| --- | --- | --- | --- |
+| Health Check > Check Server | `GET /api/health` | None | `{"status":"ok"}` |
+| Get Random Number | `GET /api/random` | None | `{"number":42}` |
+| Send Color > RED | `POST /api/color` | `{"color":"red"}` | `{"success":true}` |
+| Send Event > Button A | `POST /api/event` | `{"button":"A"}` | `{"success":true}` |
+
+**Test Connection** in API Settings also calls `GET /api/health`, using the URL
+currently entered, even before you save it. Saving settings does not call the backend.
+
+- Health must return HTTP **200** with a JSON object whose `status` is exactly `"ok"`.
+- Random must return HTTP **200** with a JSON object containing an integer `number`
+  between -2147483648 and 2147483647. A string such as `"42"` is not accepted.
+- Color values are `red`, `green`, `blue`, or `yellow` (lowercase).
+- Button values are `A`, `B`, or `C` (uppercase).
+- POST responses may use any **2xx** status. HTTP 200 with `{"success":true}` is
+  recommended; HTTP 204 with no body also works. The device does not parse POST
+  response bodies, so report failures with a non-2xx status.
+
+All requests send `Accept: application/json`; POST requests also send
+`Content-Type: application/json`. Return JSON as plain UTF-8 and keep responses
+within **1024 bytes**. Redirects are not followed, and failed POSTs are not
+automatically retried.
+
+### Try the calls from Windows PowerShell
+
+Replace the example IP and port with your backend's address. These commands make
+the same API calls as the device:
+
+```powershell
+$baseUrl = 'http://192.168.1.100:3000'
+$headers = @{ Accept = 'application/json' }
+
+# Check whether the server is online. Expected JSON: {"status":"ok"}
+Invoke-RestMethod -Method Get -Uri "$baseUrl/api/health" -Headers $headers
+
+# Request a number. Example JSON: {"number":42}
+Invoke-RestMethod -Method Get -Uri "$baseUrl/api/random" -Headers $headers
+
+# Send a color. Recommended response JSON: {"success":true}
+Invoke-RestMethod -Method Post -Uri "$baseUrl/api/color" -Headers $headers -ContentType 'application/json' -Body '{"color":"red"}'
+
+# Send a button event. Recommended response JSON: {"success":true}
+Invoke-RestMethod -Method Post -Uri "$baseUrl/api/event" -Headers $headers -ContentType 'application/json' -Body '{"button":"A"}'
+```
+
+For example, tapping **BLUE** sends `{"color":"blue"}` to `/api/color`, and
+tapping **Button C** sends `{"button":"C"}` to `/api/event`. Your backend can
+store these values and display the latest color and button on your website.
+See [docs/API.md](docs/API.md) for full HTTP examples and error explanations.
+
 ## Useful settings and diagnostics
 
 `project_config.h` contains the four paths, a 5000 ms HTTP socket timeout,
